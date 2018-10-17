@@ -58,6 +58,7 @@ static inline void popstack(std::vector<valtype>& stack)
     if (stack.empty())
         throw std::runtime_error("popstack(): stack empty");
     stack.pop_back();
+    fprintf(stderr, "[ueno]pop from stack\n");
 }
 
 bool static IsCompressedOrUncompressedPubKey(const valtype &vchPubKey) {
@@ -306,18 +307,40 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
         while (pc < pend)
         {
             bool fExec = !count(vfExec.begin(), vfExec.end(), false);
+            fprintf(stderr, "[ueno]stack====================================\n");
+            std::vector<std::vector<unsigned char> >::iterator it = stack.begin();
+            while (it != stack.end()) {
+                std::vector<unsigned char>::iterator itit = it->begin();
+                fprintf(stderr, "stack: ");
+                while (itit != it->end()) {
+                    fprintf(stderr, "%02x", *itit);
+                    itit++;
+                }
+                fprintf(stderr, "\n");
+                it++;
+            }
+            fprintf(stderr, "[ueno]====================================\n");
 
             //
             // Read instruction
             //
             if (!script.GetOp(pc, opcode, vchPushValue))
+            {
+                fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                 return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+            }
+            fprintf(stderr, "[ueno]opcode=%02x\n\n\n", opcode);
             if (vchPushValue.size() > MAX_SCRIPT_ELEMENT_SIZE)
+            {
+                fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                 return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
-
+            }
             // Note how OP_RESERVED does not count towards the opcode limit.
             if (opcode > OP_16 && ++nOpCount > MAX_OPS_PER_SCRIPT)
+            {
+                fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                 return set_error(serror, SCRIPT_ERR_OP_COUNT);
+            }
 
             if (opcode == OP_CAT ||
                 opcode == OP_SUBSTR ||
@@ -342,6 +365,7 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
 
             if (fExec && 0 <= opcode && opcode <= OP_PUSHDATA4) {
                 if (fRequireMinimal && !CheckMinimalPush(vchPushValue, opcode)) {
+                    fprintf(stderr, "[ueno]%s() - %d : op=%02x size=%lu, data[0]=%02x\n", __func__, __LINE__, opcode, vchPushValue.size(), vchPushValue[0]);
                     return set_error(serror, SCRIPT_ERR_MINIMALDATA);
                 }
                 stack.push_back(vchPushValue);
@@ -386,6 +410,7 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
 
                 case OP_CHECKLOCKTIMEVERIFY:
                 {
+                    fprintf(stderr, "[ueno]%s() - %d: OP_CHECKLOCKTIMEVERIFY\n", __func__, __LINE__);
                     if (!(flags & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY)) {
                         // not enabled; treat as a NOP2
                         break;
@@ -414,24 +439,34 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     // some arithmetic being done first, you can always use
                     // 0 MAX CHECKLOCKTIMEVERIFY.
                     if (nLockTime < 0)
+                    {
+                        fprintf(stderr, "[ueno]%s() - %d: nLockTime < 0\n", __func__, __LINE__);
                         return set_error(serror, SCRIPT_ERR_NEGATIVE_LOCKTIME);
+                    }
 
                     // Actually compare the specified lock time with the transaction.
                     if (!checker.CheckLockTime(nLockTime))
+                    {
+                        fprintf(stderr, "[ueno]%s() - %d: nLockTime=%d\n", __func__, __LINE__, nLockTime.getint());
                         return set_error(serror, SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+                    }
 
                     break;
                 }
 
                 case OP_CHECKSEQUENCEVERIFY:
                 {
+                    fprintf(stderr, "[ueno]%s() - %d: OP_CHECKSEQUENCEVERIFY\n", __func__, __LINE__);
                     if (!(flags & SCRIPT_VERIFY_CHECKSEQUENCEVERIFY)) {
                         // not enabled; treat as a NOP3
                         break;
                     }
 
                     if (stack.size() < 1)
+                    {
+                        fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                         return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+                    }
 
                     // nSequence, like nLockTime, is a 32-bit unsigned integer
                     // field. See the comment in CHECKLOCKTIMEVERIFY regarding
@@ -442,17 +477,26 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     // some arithmetic being done first, you can always use
                     // 0 MAX CHECKSEQUENCEVERIFY.
                     if (nSequence < 0)
+                    {
+                        fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                         return set_error(serror, SCRIPT_ERR_NEGATIVE_LOCKTIME);
+                    }
 
                     // To provide for future soft-fork extensibility, if the
                     // operand has the disabled lock-time flag set,
                     // CHECKSEQUENCEVERIFY behaves as a NOP.
                     if ((nSequence & CTxIn::SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0)
+                    {
+                        fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                         break;
+                    }
 
                     // Compare the specified sequence number with the input.
                     if (!checker.CheckSequence(nSequence))
+                    {
+                        fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                         return set_error(serror, SCRIPT_ERR_UNSATISFIED_LOCKTIME);
+                    }
 
                     break;
                 }
@@ -914,9 +958,13 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                 case OP_CHECKSIG:
                 case OP_CHECKSIGVERIFY:
                 {
+                    fprintf(stderr, "[ueno]%s() - %d: OP_CHECKSIG(VERIFY):%02x\n", __func__, __LINE__, opcode);
                     // (sig pubkey -- bool)
                     if (stack.size() < 2)
+                    {
+                        fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                         return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+                    }
 
                     valtype& vchSig    = stacktop(-2);
                     valtype& vchPubKey = stacktop(-1);
@@ -928,17 +976,24 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     if (sigversion == SigVersion::BASE) {
                         int found = FindAndDelete(scriptCode, CScript(vchSig));
                         if (found > 0 && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
+                        {
+                            fprintf(stderr, "[ueno]%s() - %d: Drop the signature in pre-segwit scripts but not segwit scripts\n", __func__, __LINE__);
                             return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
+                        }
                     }
 
                     if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
                         //serror is set
+                        fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                         return false;
                     }
                     bool fSuccess = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
 
                     if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && vchSig.size())
+                    {
+                        fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                         return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
+                    }
 
                     popstack(stack);
                     popstack(stack);
@@ -946,9 +1001,15 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     if (opcode == OP_CHECKSIGVERIFY)
                     {
                         if (fSuccess)
+ {
+                            fprintf(stderr, "[ueno]%s() - %d: success\n", __func__, __LINE__);
                             popstack(stack);
+                        }
                         else
+                        {
+                            fprintf(stderr, "[ueno]%s() - %d\n", __func__, __LINE__);
                             return set_error(serror, SCRIPT_ERR_CHECKSIGVERIFY);
+                        }
                     }
                 }
                 break;
